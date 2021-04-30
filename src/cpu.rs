@@ -1,8 +1,8 @@
-
+#![allow(non_snake_case)]
 
 use crate::bus::*;
 use crate::regs::*;
-
+use crate::regs::Instruction;
 
 //Struct for Cpu
 pub struct Cpu {
@@ -40,12 +40,12 @@ impl Cpu {
 		//implementing a ::New(u32) method for each struct
 		//and calling that here
 		let formatted_instruction = match (fetchVal & 0x7f) {
-			19 | 3 => {
+			103 | 19 | 3 | 27 => {
 				//I format instructions
 				let inst = RegImmInst::New(fetchVal);
 				InstructionFormat::I(inst)
 			}
-			51 => {
+			51 | 59 => {
 				//R format instructions
 				let inst = RegRegInst::New(fetchVal);  
 				InstructionFormat::R(inst)
@@ -63,14 +63,14 @@ impl Cpu {
 			55 | 23 => {
 				let inst = UpperImmInst::New(fetchVal);
 				InstructionFormat::U(inst)
-				//LUI instruction
+				//LUI / AUIPC instruction
 			}
-			103 | 111 => {
+			111 => {
 				//JAL instruction
 				let inst = JumpInst::New(fetchVal); 
 				InstructionFormat::J(inst)
 			}
-			_ => { panic!("Instruction format not yet supported"); }
+			_ => { panic!("Instruction format {:b}  not yet supported for code {:b}", (fetchVal & 0x7f), fetchVal); }
 		};
 		formatted_instruction
 	}
@@ -82,124 +82,167 @@ impl Cpu {
 		match toExecute {
 			InstructionFormat::R(inst) => {
 				match inst.instName {
-					ADD => {
+					Instruction::ADD => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_add(self.regs[inst.rs2 as usize]);
 					},
-					SUB => {
+					Instruction::ADDW => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_add(self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
+					},
+					Instruction::SUB => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_sub(self.regs[inst.rs2 as usize]);
 					},
-					SLL => {
+					Instruction::SUB => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_sub(self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
+					},
+					Instruction::SLL => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << self.regs[inst.rs2 as usize];
 					},
+					Instruction::SLLW => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << self.regs[inst.rs2 as usize] as i32 as i64 as u64;
+					},
+
 					//set destination register to 1 is inst.rs1 as usize < rs 2. SLT is signed comp, SLTU is unsigned comp
-					SLT => {
+					Instruction::SLT => {
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) < (self.regs[inst.rs2 as usize] as i64)) as u64;
 					},
-					SLTU => {
+					Instruction::SLTU => {
 						self.regs[inst.rd as usize] = (self.regs[inst.rs1 as usize] < self.regs[inst.rs2 as usize]) as u64;
 					},
-					XOR => {
+					Instruction::XOR => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] ^ self.regs[inst.rs2 as usize];
 					},
-					OR => {
+					Instruction::OR => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] | self.regs[inst.rs2 as usize];
 					},
-					AND => {
+					Instruction::AND => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] & self.regs[inst.rs2 as usize];
 					},
 					//when bitshifting, rust does logical shift for unsigned
 					//and does arithmetic shift for signed
-					SRL => {
+					Instruction::SRL => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> self.regs[inst.rs2 as usize];
 					},
-					SRA => {
+					Instruction::SRLW => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> self.regs[inst.rs2 as usize] as i32 as i64 as u64;
+					},
+					Instruction::SRA => {
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> self.regs[inst.rs2 as usize]) as u64;
+					},
+					Instruction::SRAW => {
+						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
 					},
 					_ => (),
 				}
 			},
 			InstructionFormat::I(inst) => {
 				match inst.instName {
-					ADDI => {
+					Instruction::ADDI => {
 						//can extend a signed int to an usngiend int and wrapping_add still handles it properly
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64))
 					},
-					SLTI => {
+					Instruction::ADDIW => {
+						//can extend a signed int to an usngiend int and wrapping_add still handles it properly
+						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64)) as i32 as i64 as u64;
+					},
+					Instruction::SLTI => {
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) < (inst.imm as i64)) as u64;
 					},
-					SLTIU => { //risc specifies that imm val is first exended to i64, then u64 
+					Instruction::SLTIU => { //risc specifies that imm val is first exended to i64, then u64 
 						self.regs[inst.rd as usize] = (self.regs[inst.rs1 as usize] < (inst.imm as i64 as u64)) as u64;
 					},
 					//these are sign extended (the bit oepratiosn)
-					XORI => {
+					Instruction::XORI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] ^ (inst.imm as i64 as u64);
 					},
-					ORI => {
+					Instruction::ORI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] | (inst.imm as i64 as u64); //love rust not being able to do bit operation btn u64 and i16. Expands to u64, shoud have all zeros for the other 48 bits
 					},																					
-					ANDI => {
+					Instruction::ANDI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] & (inst.imm as i64 as u64); //make all the expanded bits 1 to not mangle any data
 					},
-					SRLI => {
+					Instruction::SRLI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> (inst.imm as u16);
 					},
-					SRAI => {
+					Instruction::SRLI => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> (inst.imm as u16) as i32 as i64 as u64;
+					},
+					Instruction::SRAI => {
 						self.regs[inst.rd as usize] = unsafe {
 						std::mem::transmute::<i64,u64>((self.regs[inst.rs1 as usize] as i64) >> (inst.imm as u16))
 					};
 					},
-					SLLI => {
+					Instruction::SRAIW => {
+						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> (inst.imm as u16)) as i32 as i64 as u64;
+					},
+					Instruction::SLLI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << (inst.imm as u16);
 					},
-					LB => {
+					Instruction::SLLIW => {
+						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << (inst.imm as u16) as i32 as i64 as u64;
+					},
+					Instruction::LB => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 1) as i64 as u64;
 					},
-					LH => {
+					Instruction::LH => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 2) as i64 as u64;
 					},
-					LW => {
+					Instruction::LW => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as i64 as u64;
 					},
-					LBU => {
+					Instruction::LBU => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 1);
 					},
-					LHU => {
+					Instruction::LHU => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 2);
+					},
+					Instruction::LWU => {
+
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4);
+					},
+					Instruction::LD => {
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 8) as i64 as u64;
+					},
+					Instruction::JALR => {
+						self.pc = self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64).wrapping_sub(4);
 					},
 					_ => (),
 				}
 			},
 			InstructionFormat::B(inst) => {
 				match inst.instName {
-					BEQ => {
+					Instruction::BEQ => {
 						if self.regs[inst.rs1 as usize] == self.regs[inst.rs2 as usize] {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							println!("pc before {}", self.pc);
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 																							  //to pc each loop
+							println!("pc after {}", self.pc + 4);
 						}
 					},
-					BNE => {
+					Instruction::BNE => {
 						if self.regs[inst.rs1 as usize] != self.regs[inst.rs2 as usize] {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							println!("pc before {}", self.pc);
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							println!("pc after {}", self.pc + 4);
 						}
 					},
-					BLT => {
+					Instruction::BLT => {
 						if (self.regs[inst.rs1 as usize] as i64) < (self.regs[inst.rs2 as usize] as i64) {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
-					BGE => {
+					Instruction::BGE => {
 						if (self.regs[inst.rs1 as usize] as i64) > ( self.regs[inst.rs2 as usize] as i64) {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
-					BLTU => {
+					Instruction::BLTU => {
 						if self.regs[inst.rs1 as usize] <  self.regs[inst.rs2 as usize] {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
-					BGEU => {
+					Instruction::BGEU => {
 						if self.regs[inst.rs1 as usize] >  self.regs[inst.rs2 as usize] {
-							self.pc = self.pc.wrapping_add((inst.imm * 4) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
+							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
 					_ => (),
@@ -207,23 +250,33 @@ impl Cpu {
 			},
 			InstructionFormat::S(inst) => {
 				match inst.instName {
-					SB => {
+					Instruction::SB => {
+						println!("Calling store with size 1");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 1);
 					},
-					SH => {
+					Instruction::SH => {
+						println!("Calling store with size 2");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 2);
 					},
-					SW => {
+					Instruction::SW => {
+						println!("Calling store with size 4");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 4);
 					},
+					Instruction::SD => {
+						println!("Calling store with size 8");
+						self.bus.store(self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 8);
+					},
+					_ => {
+						panic!("agony");
+					}
 				}
 			},
 			InstructionFormat::U(inst) => {
 				match inst.instName {
-					AUIPC => {
+					Instruction::AUIPC => {
 						self.regs[inst.rd as usize] = self.pc.wrapping_add((inst.imm << 12) as i64 as u64);
 					},
-					LUI => {
+					Instruction::LUI => {
 						//sign extend to i64, the u64 so assignment works
 						self.regs[inst.rd as usize] = (inst.imm << 12) as i64 as u64;
 	
@@ -233,14 +286,11 @@ impl Cpu {
 			},
 			InstructionFormat::J(inst) => {
 				match inst.instName {
-					JAL => {
+					Instruction::JAL => {
 						self.regs[inst.rd as usize] = self.pc.wrapping_add(4);
-						self.pc = self.pc.wrapping_add(((inst.imm << 12) * 4)as i64 as u64);
-					},
-					JALR => {
-						self.regs[inst.rd as usize] = self.pc.wrapping_add(4);
-						self.pc = self.pc.wrapping_add((inst.imm << 12) as i64 as u64);
-
+						println!("pc before {}", self.pc);
+						self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4) as i64 as u64;
+						println!("pc after {}", self.pc + 4);
 					},
 					_ => (),
 				}
@@ -248,5 +298,4 @@ impl Cpu {
 			_ => panic!("Yet to implement that instruction format"),
 		}
 	}
-
 }

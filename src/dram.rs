@@ -1,9 +1,5 @@
-extern crate num_traits;
 
-use std::mem;
-use std::ops::Shr;
-use std::ops::BitAnd;
-use num_traits::int::PrimInt;
+#![allow(non_snake_case)]
 pub struct Dram {
 	pub dram : Vec<u8>,
 }
@@ -11,9 +7,17 @@ pub struct Dram {
 
 impl Dram {
 	pub fn New(code: Vec<u8>) -> Dram {
-		Self {
-			dram: code,
-		}
+		let mut mem = Self {
+			dram: vec![0; 1024*1024],
+		};
+		//funky splice method
+		//good for replacing subsection of a vector
+		//takes a range (usually a lloop, but could be every second)
+		//and takes an iterator (or smn that can go into one)
+		//needs .cloned() because it needs direct reference? Like, T instead of &T??
+		//idk
+		mem.dram.splice(..code.len(), code.iter().cloned());
+		mem
 	}
 
 	pub fn load(&self, addr: u64, size: u8) -> u64 {
@@ -45,13 +49,14 @@ impl Dram {
 	//but then is had to be able to be coerced into a u8 - but not T, but the results of T after being bitshifted
 	//how the hell does anyone do anything useful in a function with generics
 	pub fn store(&mut self, addr: u64, data: u64, size: u8) {
-		let addrInd = addr as usize;;
-		if size > 8 {
-			let size = 8;
+		let addrInd = addr as usize;
+		let mut tmpSize = size;
+		if tmpSize > 8 {
+			tmpSize = 8;
 		}
-
-		for i in (0..(size as usize)) {
-			self.dram[addrInd + i] = (data >> (((i as u8)*8)) & 0xff) as u8;	
+		for i in (0..(tmpSize as usize)) {
+			self.dram[addrInd + i] = (data >> (i*8) & 0xff) as u8;
+		//	println!(" mem val stored is {:x}", self.dram[addrInd + i]);
 		}
 	}
 }

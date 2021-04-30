@@ -3,6 +3,8 @@
 //Probably aiming for full support for R64G - generic 64 bit instruction set
 //
 
+#![allow(non_snake_case)]
+
 use std::env;
 use std::fs::File;
 use std::io;
@@ -32,7 +34,7 @@ fn main() -> io::Result<()> {
 	
 	let mut code = Vec::new();
 	exeFile.read_to_end(&mut code)?;
-	
+	let codeLen = code.len();
 	let mut cpu = Cpu::new(code);
 	//emulation loop
 	//could just be a while(true) i think
@@ -41,21 +43,23 @@ fn main() -> io::Result<()> {
 		//fetch instruciton
 		let instruction = cpu.fetch();
 				
-		//update pc counter
-		cpu.pc += 4;
 		
 		//TO DO: decode, the start of execute
-		let instruction = Cpu::decode(instruction);
-		println!("{:?}", instruction);
-
-		cpu.execute(instruction);
-	
+		let instructionFormatted = Cpu::decode(instruction);
+		println!("{:?} from {:b}", instructionFormatted, instruction);
+		cpu.execute(instructionFormatted);
+		println!("pc is currently {}", cpu.pc);	
+		//update pc counter
+		cpu.pc = cpu.pc.wrapping_add(4);
 		for i in (0..32) {
 			if (cpu.regs[i as usize] != 0) {
 				println!("register {} has val {}", i, cpu.regs[i as usize]);
 			}
 		}
-
+		cpu.regs[0] = 0;
+		if cpu.pc == 0 {
+			break
+		}
 	} 
 	Ok(())
 
