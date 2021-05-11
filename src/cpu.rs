@@ -1,8 +1,7 @@
 #![allow(non_snake_case)]
 
-use crate::bus::*;
 use crate::regs::*;
-use crate::regs::Instruction;
+use crate::bus::Bus;
 
 //Struct for Cpu
 pub struct Cpu {
@@ -91,14 +90,14 @@ impl Cpu {
 					Instruction::SUB => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_sub(self.regs[inst.rs2 as usize]);
 					},
-					Instruction::SUB => {
+					Instruction::SUBW => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize].wrapping_sub(self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
 					},
 					Instruction::SLL => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << self.regs[inst.rs2 as usize];
 					},
 					Instruction::SLLW => {
-						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << self.regs[inst.rs2 as usize] as i32 as i64 as u64;
+						self.regs[inst.rd as usize] = (self.regs[inst.rs1 as usize] << self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
 					},
 
 					//set destination register to 1 is inst.rs1 as usize < rs 2. SLT is signed comp, SLTU is unsigned comp
@@ -129,7 +128,7 @@ impl Cpu {
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> self.regs[inst.rs2 as usize]) as u64;
 					},
 					Instruction::SRAW => {
-						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> self.regs[inst.rs2 as usize]) as i32 as i64 as u64;
+						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i32) >> self.regs[inst.rs2 as usize]) as i64 as u64;
 					},
 					_ => (),
 				}
@@ -163,7 +162,7 @@ impl Cpu {
 					Instruction::SRLI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> (inst.imm as u16);
 					},
-					Instruction::SRLI => {
+					Instruction::SRLIW => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] >> (inst.imm as u16) as i32 as i64 as u64;
 					},
 					Instruction::SRAI => {
@@ -172,22 +171,22 @@ impl Cpu {
 					};
 					},
 					Instruction::SRAIW => {
-						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i64) >> (inst.imm as u16)) as i32 as i64 as u64;
+						self.regs[inst.rd as usize] = ((((self.regs[inst.rs1 as usize]) as i32) >> inst.imm) as i64 as u64);
 					},
 					Instruction::SLLI => {
 						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << (inst.imm as u16);
 					},
 					Instruction::SLLIW => {
-						self.regs[inst.rd as usize] = self.regs[inst.rs1 as usize] << (inst.imm as u16) as i32 as i64 as u64;
+						self.regs[inst.rd as usize] = (self.regs[inst.rs1 as usize] << (inst.imm as u16)) as i32 as i64 as u64;
 					},
 					Instruction::LB => {
-						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 1) as i64 as u64;
+						self.regs[inst.rd as usize]  = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 1) as i8 as i64 as u64;
 					},
 					Instruction::LH => {
-						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 2) as i64 as u64;
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 2) as i16 as i64 as u64;
 					},
 					Instruction::LW => {
-						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as i64 as u64;
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as i32 as i64 as u64;
 					},
 					Instruction::LBU => {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 1);
@@ -203,7 +202,9 @@ impl Cpu {
 						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 8) as i64 as u64;
 					},
 					Instruction::JALR => {
-						self.pc = self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64).wrapping_sub(4);
+						//gotta clear the last bit, which is the u64::MAX bit
+						self.regs[inst.rd as usize] = self.pc.wrapping_add(4);
+						self.pc = (self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64).wrapping_sub(4)) & (u64::MAX-1);
 					},
 					_ => (),
 				}
@@ -212,17 +213,13 @@ impl Cpu {
 				match inst.instName {
 					Instruction::BEQ => {
 						if self.regs[inst.rs1 as usize] == self.regs[inst.rs2 as usize] {
-							println!("pc before {}", self.pc);
 							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 																							  //to pc each loop
-							println!("pc after {}", self.pc + 4);
 						}
 					},
 					Instruction::BNE => {
 						if self.regs[inst.rs1 as usize] != self.regs[inst.rs2 as usize] {
-							println!("pc before {}", self.pc);
 							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
-							println!("pc after {}", self.pc + 4);
 						}
 					},
 					Instruction::BLT => {
@@ -231,7 +228,7 @@ impl Cpu {
 						}
 					},
 					Instruction::BGE => {
-						if (self.regs[inst.rs1 as usize] as i64) > ( self.regs[inst.rs2 as usize] as i64) {
+						if (self.regs[inst.rs1 as usize] as i64) >= ( self.regs[inst.rs2 as usize] as i64) {
 							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
@@ -241,7 +238,7 @@ impl Cpu {
 						}
 					},
 					Instruction::BGEU => {
-						if self.regs[inst.rs1 as usize] >  self.regs[inst.rs2 as usize] {
+						if self.regs[inst.rs1 as usize] >=  self.regs[inst.rs2 as usize] {
 							self.pc = self.pc.wrapping_add((inst.imm << 1) as u64).wrapping_sub(4); //the syub is because we ahve an unconditional ass
 						}
 					},
@@ -299,3 +296,7 @@ impl Cpu {
 		}
 	}
 }
+
+
+#[cfg(test)]
+mod tests;

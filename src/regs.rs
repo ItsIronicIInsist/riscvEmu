@@ -1,4 +1,3 @@
-
 //apparently there are many forms of instruciton formats
 //but to start Ill just support the main 6
 //will be slightly memory inefficient (opcode has 7 bits, stored in a u8)
@@ -9,7 +8,7 @@
 //any register reference is 5bits
 //functN is N bits wide
 #[derive(Debug)]
-
+#[derive(Copy,Clone)]
 pub enum InstructionFormat { 
 	R(RegRegInst), 
 	I(RegImmInst),
@@ -24,6 +23,7 @@ pub enum InstructionFormat {
 
 #[derive(PartialEq)]
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 pub enum Instruction {
 	JAL, //Jump instructions
 	JALR,
@@ -83,6 +83,7 @@ pub enum Instruction {
 // | funct7 | rs2 | rs1 | funct3 | rd | opcode
 //unsure: Do I need the opcose in these structs?
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct RegRegInst {	
 	pub rs1: u8, //source register 1
 	pub rs2: u8, //source register 2
@@ -140,6 +141,7 @@ impl RegRegInst {
 //notable exception is the shift intruction
 // | imm | rs1 | funct3 | rd | opcode |
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct RegImmInst {
 	pub rs1: u8, //source register
 	pub rd: u8, //dest register
@@ -247,6 +249,7 @@ impl RegImmInst {
 // Memory at [rs1] + imm = [rs2] (brackets are dereferencing
 //Loads are n the I format
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct StoreInst {
 	pub rs1: u8, // base (base mem of where stuff is being stored. Imm is added to it)
 	pub rs2: u8, // src (val being stored)
@@ -285,6 +288,7 @@ impl StoreInst {
 //so jump is pc + 4*imm
 //needs two source registers for comparing. Like jeq
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct BranchInst {
 	pub rs1: u8, //source register 1
 	pub rs2: u8, //source register 2
@@ -338,6 +342,7 @@ impl BranchInst {
 //Theres no funct3, just two instructions LUI (load upper immediate) and AUIPC (add upper immediat to pc)
 // AUIPC does not change pc - it just stores the result in the destination register. used for relative addressing
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct UpperImmInst {
 	pub rd: u8, //destination register
 	pub imm: i32, //the immediate vaue. 20bits
@@ -367,6 +372,7 @@ impl UpperImmInst {
 //dont do any pc + 4*imm stuff (for some reason???)
 //imm value is highly mangled. Look nto something called multiplexer
 #[derive(Debug)]
+#[derive(Copy,Clone)]
 pub struct JumpInst {
 	pub rd: u8, // PC+4 is stored in here
 	pub imm: i32, //the location to jump to. Dont to the pc + 4*imm, just pc + imm

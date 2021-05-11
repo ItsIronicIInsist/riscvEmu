@@ -1,5 +1,5 @@
-
 #![allow(non_snake_case)]
+
 pub struct Dram {
 	pub dram : Vec<u8>,
 }
@@ -30,12 +30,13 @@ impl Dram {
 		//then return u64
 		//then dont need like, a function per integer size
 		let addrInd = addr as usize;
+		let mut sizeBound: usize  = size as usize;
 		if size > 8 {
-			let size = 8;
+			sizeBound = 8;
 		}
 		let mut bytes : [u8;8] = [0;8];
 
-		for i in (0..(size as usize)) {
+		for i in (0..(sizeBound)) {
 			bytes[i] = (self.dram[addrInd + i ]);
 		}
 
@@ -59,4 +60,5 @@ impl Dram {
 		//	println!(" mem val stored is {:x}", self.dram[addrInd + i]);
 		}
 	}
+
 }

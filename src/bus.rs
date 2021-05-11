@@ -2,8 +2,8 @@
 //will add stuff for signals later
 //this is what carries signals from the cpu to DRAM and other devices
 #![allow(non_snake_case)]
+use crate::dram::Dram;
 
-use crate::dram::*;
 pub struct Bus {
 	pub dram: Dram,
 }
@@ -23,3 +23,4 @@ impl Bus {
 		self.dram.store(addr, data,size);
 	}
 }
+
