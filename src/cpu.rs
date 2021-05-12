@@ -6,6 +6,8 @@ use crate::bus::Bus;
 //Struct for Cpu
 pub struct Cpu {
 	pub regs: [u64;32], //registers. RISC-V has 32 of them. 64 bitwide of course, bc 64bit arch
+	pub fregs: [f64;32],
+	pub fcsr: u32,
 	pub pc: u64, //program counter
 	pub bus: Bus,
 }
@@ -17,6 +19,8 @@ impl Cpu {
 		let mut cpu = Cpu {
 			regs: [0;32], //set all regs to 0. Doesnt really matter except
 						//that r0 is a special register - the zero register. Must always be = 0
+			fregs: [0.0;32],
+			fcsr: 0,
 			pc: 0,
 			bus: Bus::New(code),
 		};
@@ -43,32 +47,33 @@ impl Cpu {
 				//I format instructions
 				let inst = RegImmInst::New(fetchVal);
 				InstructionFormat::I(inst)
-			}
+			},
 			51 | 59 => {
 				//R format instructions
+				//Includes instructions from: RV64-I, RV64-M (all RV64-M inst are R format)
 				let inst = RegRegInst::New(fetchVal);  
 				InstructionFormat::R(inst)
-			}
+			},
 			35  => {
 				//S format instructions
 				let inst = StoreInst::New(fetchVal);
 				InstructionFormat::S(inst)
-			}
+			},
 			99 => {
 				//B format instructions
 				let inst = BranchInst::New(fetchVal);
 				InstructionFormat::B(inst)
-			}
+			},
 			55 | 23 => {
 				let inst = UpperImmInst::New(fetchVal);
 				InstructionFormat::U(inst)
 				//LUI / AUIPC instruction
-			}
+			},
 			111 => {
 				//JAL instruction
 				let inst = JumpInst::New(fetchVal); 
 				InstructionFormat::J(inst)
-			}
+			},
 			_ => { panic!("Instruction format {:b}  not yet supported for code {:b}", (fetchVal & 0x7f), fetchVal); }
 		};
 		formatted_instruction
@@ -130,7 +135,229 @@ impl Cpu {
 					Instruction::SRAW => {
 						self.regs[inst.rd as usize] = ((self.regs[inst.rs1 as usize] as i32) >> self.regs[inst.rs2 as usize]) as i64 as u64;
 					},
+
+					//RV64-M instructions
+					Instruction::MUL => { //??
+						let temp: u128 = (self.regs[inst.rs1 as usize] * self.regs[inst.rs2 as usize]) as u128;
+						self.regs[inst.rd as usize] = temp as u64;
+					},
+					Instruction::MULH => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64) * (self.regs[inst.rs2 as usize] as i64)) as u128;
+						self.regs[inst.rd as usize] = (temp >> 64) as u64;
+					},
+					Instruction::MULHSU => { //rust's type strictness sucks
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i128) * (self.regs[inst.rs2 as usize] as u128 as i128)) as u128;
+						self.regs[inst.rd as usize] = (temp >> 64) as u64;
+					},
+					Instruction::MULHU => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] ) * self.regs[inst.rs2 as usize]) as u128;
+						self.regs[inst.rd as usize] = (temp >> 64) as u64;
+					},
+					Instruction::DIV => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64) / (self.regs[inst.rs2 as usize] as i64)) as u128;
+						self.regs[inst.rd as usize] = temp as u64;
+					},
+					Instruction::DIVU => {
+						let temp: u128 = (self.regs[inst.rs1 as usize] / self.regs[inst.rs2 as usize]) as u128;
+						self.regs[inst.rd as usize] = temp as u64;
+					},
+					Instruction::REM => { //??
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64) % (self.regs[inst.rs2 as usize] as i64)) as u128;
+						self.regs[inst.rd as usize] = temp as u64;
+					},
+					Instruction::REMU => {
+						let temp: u128 = (self.regs[inst.rs1 as usize] % self.regs[inst.rs2 as usize]) as u128;
+						self.regs[inst.rd as usize] = temp as u64;
+					},
+					Instruction::MULW => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
+						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+					},
+					Instruction::DIVW => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) * (self.regs[inst.rs2 as usize] as i32)) as u128;
+						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+					},
+					Instruction::DIVUW => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
+						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+					},
+					Instruction::REMW => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) * (self.regs[inst.rs2 as usize] as i32)) as u128;
+						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+					},
+					Instruction::REMUW => {
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
+						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+					},
+
+					//RV64-F instructions
+					Instruction::FADDS => {
+						self.fregs[inst.rd as usize] = (self.fregs[inst.rs1 as usize] + self.fregs[inst.rs2 as usize]) as f32 as f64;
+					},
+					Instruction::FSUBS => {
+						self.fregs[inst.rd as usize] = (self.fregs[inst.rs1 as usize] - self.fregs[inst.rs2 as usize]) as f32 as f64;
+					},
+					Instruction::FMULS => {
+						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32) * (self.fregs[inst.rs2 as usize] as f32)) as f64;
+						self.fregs[inst.rd as usize] = temp;
+					},
+					Instruction::FDIVS => {
+						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32) / (self.fregs[inst.rs2 as usize] as f32)) as f64;
+						self.fregs[inst.rd as usize] = temp;
+					},
+					Instruction::FSQRTS => {
+						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32).sqrt()) as f64;
+						self.fregs[inst.rd as usize] = temp;
+					},
+					Instruction::FMINS => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						if f1 < f2 {
+							self.fregs[inst.rd as usize] = f1 as f64;
+						}
+						else {
+							self.fregs[inst.rd as usize] = f2 as f64;
+						}
+					},
+					Instruction::FMAXS => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						if f1 > f2 {
+							self.fregs[inst.rd as usize] = f1 as f64;
+						}
+						else {
+							self.fregs[inst.rd as usize] = f2 as f64;
+						}
+					},
+					Instruction::FEQS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						if f1 == f2 {
+							self.regs[inst.rd as usize] = 1;
+						}
+						else {
+							self.regs[inst.rd as usize] = 0;
+						}
+					},
+					Instruction::FLTS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						if f1 < f2 {
+							self.regs[inst.rd as usize] = 1;
+						}
+						else {
+							self.regs[inst.rd as usize] = 0;
+						}
+					},
+					Instruction::FLES  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						if f1 <= f2 {
+							self.regs[inst.rd as usize] = 1;
+						}
+						else {
+							self.regs[inst.rd as usize] = 0;
+						}
+					},
+					Instruction::FCVTWS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let s1 = f1.to_bits() as i32;
+						self.regs[inst.rd as usize] = s1 as i64 as u64;
+					},
+					Instruction::FCVTWUS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let s1 = f1.to_bits();
+						self.regs[inst.rd as usize] = s1 as u64;
+					},
+					Instruction::FCVTSW => { //this probs doesnt work. Need to conv from i32 to  => f32
+						let s1 = self.regs[inst.rs1 as usize] as i32;
+						let f1 = f32::from_bits(s1 as u32);
+						self.fregs[inst.rd as usize] = f1 as f64;
+					},
+					Instruction::FCVTSWU  => {
+						let s1 = self.regs[inst.rs1 as usize] as u32;
+						let f1 = f32::from_bits(s1);
+						self.fregs[inst.rd as usize] = f1 as f64;
+					},
+					Instruction::FCVTLS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let s1 = f1.to_bits() as i64 as u64;
+						self.regs[inst.rd as usize] = s1;
+					},
+					Instruction::FCVTLUS  => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let s1 = f1.to_bits() as u64;
+						self.regs[inst.rd as usize] = s1;
+					},
+					Instruction::FCVTSL  => {
+						let s1 = self.regs[inst.rs1 as usize] as i64;
+						let f1 = f64::from_bits(s1 as u64);
+						self.fregs[inst.rd as usize] = f1;
+					},
+					Instruction::FCVTSLU  => {
+						let s1 = self.regs[inst.rs1 as usize] as u64;
+						let f1 = f64::from_bits(s1);
+						self.fregs[inst.rd as usize] = f1;
+					},
+					Instruction::FSGNJS => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let u1 = f1.to_bits();
+						let u2 = f2.to_bits();
+						let u3 = (u1 & !0x80000000) | (u2 & 0x80000000);
+						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+					},
+					Instruction::FSGNJNS => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let u1 = f1.to_bits();
+						let u2 = f2.to_bits();
+						let u3 = (u1 & !0x80000000) | (!u2 & 0x80000000);
+						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+					},
+					Instruction::FSGNJXS => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let u1 = f1.to_bits();
+						let u2 = f2.to_bits();
+						let u3 = (u1 & !0x80000000) | ((u2^u1) & 0x80000000);
+						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+					},
+					Instruction::FMVXW => {
+						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let u1 = f1.to_bits();
+						self.regs[inst.rd as usize] = u1 as i32 as i64 as u64; //gotta sign extend
+					},
+					Instruction::FMVWX => {
+						let u1 = self.regs[inst.rs1 as usize] as u32;
+						let f1 = f32::from_bits(u1);
+						self.fregs[inst.rd as usize] = u1 as i32 as f64;
+					},
+					Instruction::FCLASSS => {},
 					_ => (),
+				}
+			},
+			InstructionFormat::R4(inst) => {
+				match inst.instName {
+					Instruction::FMADDS =>{
+						self.fregs[inst.rd as usize] = ((self.fregs[inst.rs1 as usize] as f32).mul_add(self.fregs[inst.rs2 as usize] as f32, self.fregs[inst.rs3 as usize] as f32)) as f64;
+					},
+					Instruction::FMSUBS =>{
+						self.fregs[inst.rd as usize] = ((self.fregs[inst.rs1 as usize] as f32).mul_add(self.fregs[inst.rs2 as usize] as f32, -(self.fregs[inst.rs3 as usize] as f32))) as f64;
+					},
+					Instruction::FNMADDS =>{ //neither of these probably work right, not inverting the (f1*f2) i think
+						let f1 = self.fregs[inst.rs1 as usize] as f32;	
+						let f2 = self.fregs[inst.rs2 as usize] as f32;	
+						let f3 = self.fregs[inst.rs3 as usize] as f32;	
+						self.fregs[inst.rd as usize] = (-(f1 * f2) -f3) as f64;
+					},
+					Instruction::FNMSUBS =>{
+						let f1 = self.fregs[inst.rs1 as usize] as f32;	
+						let f2 = self.fregs[inst.rs2 as usize] as f32;	
+						let f3 = self.fregs[inst.rs3 as usize] as f32;	
+						self.fregs[inst.rd as usize] = (-(f1 * f2) + f3) as f64;
+					},
+					_ => panic!("Invalid instruction for R4 format"),
 				}
 			},
 			InstructionFormat::I(inst) => {
@@ -206,6 +433,11 @@ impl Cpu {
 						self.regs[inst.rd as usize] = self.pc.wrapping_add(4);
 						self.pc = (self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64).wrapping_sub(4)) & (u64::MAX-1);
 					},
+					Instruction::FLW => {
+						let floatVal = f32::from_bits(self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as u32);
+						self.fregs[inst.rd as usize] = floatVal as f64; 
+					},
+					
 					_ => (),
 				}
 			},
@@ -248,20 +480,19 @@ impl Cpu {
 			InstructionFormat::S(inst) => {
 				match inst.instName {
 					Instruction::SB => {
-						println!("Calling store with size 1");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 1);
 					},
 					Instruction::SH => {
-						println!("Calling store with size 2");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 2);
 					},
 					Instruction::SW => {
-						println!("Calling store with size 4");
 						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 4);
 					},
 					Instruction::SD => {
-						println!("Calling store with size 8");
 						self.bus.store(self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64), self.regs[inst.rs2 as usize], 8);
+					},
+					Instruction::FSW => {
+						self.bus.store((self.regs[inst.rs1 as usize]).wrapping_add(inst.imm as u64), self.fregs[inst.rs2 as usize].to_bits() as u64, 4);
 					},
 					_ => {
 						panic!("agony");

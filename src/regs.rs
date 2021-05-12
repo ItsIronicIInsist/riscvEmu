@@ -11,6 +11,7 @@
 #[derive(Copy,Clone)]
 pub enum InstructionFormat { 
 	R(RegRegInst), 
+	R4(R3Inst),
 	I(RegImmInst),
 	S(StoreInst),
 	B(BranchInst),
@@ -74,10 +75,76 @@ pub enum Instruction {
 	LHU,
 	LWU, //64bit load instructions
 	LD,
+	MUL, //RV64-M instructions
+	MULH,
+	MULHSU,
+	MULHU,
+	DIV,
+	DIVU,
+	REM,
+	REMU,
+	MULW,
+	DIVW,
+	DIVUW,
+	REMW,
+	REMUW,
+	FLW, //RV64F (hell)
+	FSW,
+	FADDS,
+	FSUBS,
+	FMULS,
+	FDIVS,
+	FSQRTS,
+	FMINS,
+	FMAXS,
+	FEQS,
+	FLTS,
+	FLES,
+	FNMADDS,
+	FNMSUBS,
+	FMSUBS,
+	FMADDS,
+	FCVTSLU,
+	FCVTSL,
+	FCVTLUS,
+	FCVTLS,
+	FCVTSWU,
+	FCVTSW,
+	FCVTWUS,
+	FCVTWS,
+	FSGNJNS,
+	FSGNJS,
+	FSGNJXS,
+	FMVXW,
+	FMVWX,
+	FCLASSS,
 
 }
 
 
+#[derive(Debug)]
+#[derive(Copy,Clone)]
+pub struct R3Inst {
+	pub rs1: u8,
+	pub rs2: u8,
+	pub rs3: u8,
+	pub rd: u8,
+	pub instName: Instruction,
+}
+
+//PLACEHOLDER
+impl R3Inst {
+	pub fn New(code: u32) -> R3Inst {
+		let inst = R3Inst {
+			rs1: 0,
+			rs2: 0,
+			rs3: 0,
+			rd: 0,
+			instName: Instruction::ADD,
+		};
+		inst
+	}
+}
 
 //Instruction format for instruction w/ two source registers (e.g. add r0, r1, r2 adds r1 and r2, stores in r0)
 // | funct7 | rs2 | rs1 | funct3 | rd | opcode
@@ -93,44 +160,89 @@ pub struct RegRegInst {
 
 impl RegRegInst {
 	pub fn New(code:u32) -> RegRegInst {
-		let funct = ((code >> 12) & 0x7) | (((code >> 25) & 0x7f) << 3);
-		let opcode = code & 0x7f;	
-		if opcode == 41 {
-			let inst = RegRegInst {
-				rd: (((code >> 7) & 0x1f) as u8),
-				rs1: (((code >> 15) & 0x1f) as u8),
-				rs2: (((code >> 20) & 0x1f) as u8),
-				instName: match funct {
-					0 => Instruction::ADD,
-					256 => Instruction::SUB,
-					1 => Instruction::SLL,
-					2 => Instruction::SLT,
-					3 => Instruction::SLTU,
-					4 => Instruction::XOR,
-					5 => Instruction::SRL,
-					261 => Instruction::SRA,
-					6 => Instruction::OR,
-					7 => Instruction::AND,
-					_=> panic!("Invalid R-type opcode 32 bit"),
-				}
-			};
-			inst
+		let funct3 = (code >> 12) & 0x7;
+		let funct7 = (code >> 25) & 0x7f;
+		let opcode = code & 0x7f;
+
+		if opcode == 51 {
+			if funct7 == 1 {
+			//RV32M inst
+				let inst = RegRegInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					rs1: (((code >> 15) & 0x1f) as u8),
+					rs2: (((code >> 20) & 0x1f) as u8),
+					instName: match funct3 {
+						0 => Instruction::MUL,
+						1 => Instruction::MULH,
+						2 => Instruction::MULHSU,
+						3 => Instruction::MULHU,
+						4 => Instruction::DIV,
+						5 => Instruction::DIVU,
+						6 => Instruction::REM,
+						7 => Instruction::REMU,
+						_=> panic!("Invalid R-type opcode 32 bit RV32M"),
+					}
+				};
+				inst
+			}
+			else {
+			//RV32I inst
+				let inst = RegRegInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					rs1: (((code >> 15) & 0x1f) as u8),
+					rs2: (((code >> 20) & 0x1f) as u8),
+					instName: match (funct7, funct3) {
+						(0,0) => Instruction::ADD,
+						(32,0) => Instruction::SUB,
+						(0,1) => Instruction::SLL,
+						(0,2) => Instruction::SLT,
+						(0,3) => Instruction::SLTU,
+						(0,4) => Instruction::XOR,
+						(0,5) => Instruction::SRL,
+						(32,5) => Instruction::SRA,
+						(0,6) => Instruction::OR,
+						(0,7) => Instruction::AND,
+						_=> panic!("Invalid R-type opcode 32 bit RV32I"),
+					}
+				};
+				inst
+			}
 		}
 		else {
-			let inst = RegRegInst {
-				rd: (((code >> 7) & 0x1f) as u8),
-				rs1: (((code >> 15) & 0x1f) as u8),
-				rs2: (((code >> 20) & 0x1f) as u8),
-				instName: match funct {
-					0 => Instruction::ADDW,
-					256 => Instruction::SUBW,
-					1 => Instruction::SLLW,
-					261 => Instruction::SRAW,
-					5 => Instruction::SRLW,
-					_=> panic!("Invalid R-type 64bit funct  {} for  inst {:b}",funct, code ),
-				}
-			};
-			inst
+			if funct7 == 1 {
+			//RV64M instructions
+				let inst = RegRegInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					rs1: (((code >> 15) & 0x1f) as u8),
+					rs2: (((code >> 20) & 0x1f) as u8),
+					instName: match funct3 {
+						0 => Instruction::MULW,
+						4 => Instruction::DIVW,
+						5 => Instruction::DIVUW,
+						6 => Instruction::REMW,
+						7 => Instruction::REMUW,
+						_=> panic!("Invalid R-type 64bit funct RV64I" ),
+					}
+				};
+				inst
+			}
+			else {
+			//RV64I instructions
+				let inst = RegRegInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					rs1: (((code >> 15) & 0x1f) as u8),
+					rs2: (((code >> 20) & 0x1f) as u8),
+					instName: match (funct7, funct3) {
+						(0,0) => Instruction::ADDW,
+						(32,0) => Instruction::SUBW,
+						(0,1) => Instruction::SLLW,
+						(32,5) => Instruction::SRAW,
+						(0,5) => Instruction::SRLW,
+						_=> panic!("Invalid R-type 64bit funct RV64I" ),
+					}
+				};
+				inst
+			}
 		}
 	}
 }
