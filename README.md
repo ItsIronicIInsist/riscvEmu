@@ -7,8 +7,11 @@ Aiming to have full support for RV64G (IMAFD+csr) + some hardware peripherals
 
 Single threader so fence and atomic instructions arent proper implementations
 
+
 Currently working on:
+
 RV64-M (testing)
+
 RV64-F (testing)
 
 Currently have support for:
