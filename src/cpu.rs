@@ -3,6 +3,7 @@
 use crate::regs::*;
 use crate::bus::Bus;
 
+
 //Struct for Cpu
 pub struct Cpu {
 	pub regs: [u64;32], //registers. RISC-V has 32 of them. 64 bitwide of course, bc 64bit arch
@@ -12,6 +13,14 @@ pub struct Cpu {
 	pub bus: Bus,
 }
 
+enum rounding_mode {
+	RNE = 0,
+	RTZ = 1,
+	RDN = 2,
+	RUP = 3,
+	RMM = 4,
+	DYN = 7,
+}
 
 impl Cpu {
 	//Initialising stuff for a Cpu
@@ -37,13 +46,73 @@ impl Cpu {
 		return instruction;
 	}
 
+	//riscv NaN boxs f32s into the lower 32 bits of an f64
+	//have functions to box and unbox these f32s
+	pub fn unbox_float(num: f64) -> f32 {
+		let raw_bits = num.to_bits();
+		let lower_32 : u32 = (raw_bits & (u32::MAX) as u64) as u32;
+		let unboxed_float = f32::from_bits(lower_32);
+		unboxed_float
+	}
+
+	pub fn box_float(num: f32) -> f64 {
+		let raw_bits = num.to_bits();
+		let NaNBox : u64 = (raw_bits as u64) | ((u32::MAX as u64) << 32);
+		let NaNFloat = f64::from_bits(NaNBox);
+		NaNFloat
+	}
+
+	pub fn round_float(&self, num:f32) -> f32 {
+		let rounding_mode = (self.fscr >> 5) & 0x7;
+		match rounding_mode {
+			RNE => { //round to nearest, ties to even
+				let mut temp = num.round()
+				if num.fract() == 0.5 {
+					if num % 2.0 == 1.0 {
+						if num < 0 {
+							temp = num.floor();
+						}
+						else {
+							temp = num.ceil();
+						}
+					}
+				}
+			},
+			RTZ => {
+				num.trunc()
+			},
+			RDN => {
+				num.round()
+			},
+			RUP => {
+				num.ceil()
+			},
+			RMM => { //round to nearest, ties to larger max
+				let mut temp = num.round()
+				if abs(temp) < abs(num) {
+					if num.fract() == 0.5 {
+						if num < 0 {
+							temp = num.floor();
+						}
+						else {
+							temp = num.ceil();
+						}
+					}
+				}
+			},
+			//panic here??
+			DYN => {},
+			_ => {},
+		}
+	}
+
 	pub fn decode(fetchVal: u32) -> InstructionFormat {
 		//consider reformatting this
 		//such that rather than manually creating the structs
 		//implementing a ::New(u32) method for each struct
 		//and calling that here
 		let formatted_instruction = match (fetchVal & 0x7f) {
-			103 | 19 | 3 | 27 => {
+			103 | 19 | 3 | 27 | 15  => {
 				//I format instructions
 				let inst = RegImmInst::New(fetchVal);
 				InstructionFormat::I(inst)
@@ -138,19 +207,19 @@ impl Cpu {
 
 					//RV64-M instructions
 					Instruction::MUL => { //??
-						let temp: u128 = (self.regs[inst.rs1 as usize] * self.regs[inst.rs2 as usize]) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64 as i128) * (self.regs[inst.rs2 as usize] as i64 as i128)) as u128;
 						self.regs[inst.rd as usize] = temp as u64;
 					},
 					Instruction::MULH => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64) * (self.regs[inst.rs2 as usize] as i64)) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i64 as i128) * (self.regs[inst.rs2 as usize] as i64 as i128)) as u128;
 						self.regs[inst.rd as usize] = (temp >> 64) as u64;
 					},
 					Instruction::MULHSU => { //rust's type strictness sucks
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as i128) * (self.regs[inst.rs2 as usize] as u128 as i128)) as u128;
+						let temp: i128 = ((self.regs[inst.rs1 as usize] as i64 as i128) * (self.regs[inst.rs2 as usize] as u128 as i128)) as i128;
 						self.regs[inst.rd as usize] = (temp >> 64) as u64;
 					},
 					Instruction::MULHU => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] ) * self.regs[inst.rs2 as usize]) as u128;
+						let temp: u128 = (self.regs[inst.rs1 as usize] as u128 ) * (self.regs[inst.rs2 as usize] as u128);
 						self.regs[inst.rd as usize] = (temp >> 64) as u64;
 					},
 					Instruction::DIV => {
@@ -170,68 +239,98 @@ impl Cpu {
 						self.regs[inst.rd as usize] = temp as u64;
 					},
 					Instruction::MULW => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
-						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
+						let temp: i128 = ((self.regs[inst.rs1 as usize] as u32 as i128) * (self.regs[inst.rs2 as usize] as u32 as i128));
+						self.regs[inst.rd as usize] = temp as i32 as u64;
 					},
 					Instruction::DIVW => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) * (self.regs[inst.rs2 as usize] as i32)) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) / (self.regs[inst.rs2 as usize] as i32)) as u128;
 						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
 					},
 					Instruction::DIVUW => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) / (self.regs[inst.rs2 as usize] as u32)) as u128;
 						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
 					},
 					Instruction::REMW => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) * (self.regs[inst.rs2 as usize] as i32)) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as i32) % (self.regs[inst.rs2 as usize] as i32)) as u128;
 						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
 					},
 					Instruction::REMUW => {
-						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) * (self.regs[inst.rs2 as usize] as u32)) as u128;
+						let temp: u128 = ((self.regs[inst.rs1 as usize] as u32) % (self.regs[inst.rs2 as usize] as u32)) as u128;
 						self.regs[inst.rd as usize] = temp as i32 as i64 as u64;
 					},
 
 					//RV64-F instructions
 					Instruction::FADDS => {
-						self.fregs[inst.rd as usize] = (self.fregs[inst.rs1 as usize] + self.fregs[inst.rs2 as usize]) as f32 as f64;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+
+						self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_1 + unboxed_2);
 					},
 					Instruction::FSUBS => {
-						self.fregs[inst.rd as usize] = (self.fregs[inst.rs1 as usize] - self.fregs[inst.rs2 as usize]) as f32 as f64;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						
+						self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_1 - unboxed_2);
 					},
 					Instruction::FMULS => {
-						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32) * (self.fregs[inst.rs2 as usize] as f32)) as f64;
-						self.fregs[inst.rd as usize] = temp;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let temp  = unboxed_1 * unboxed_2;
+						self.fregs[inst.rd as usize] = Cpu::box_float(temp);
 					},
-					Instruction::FDIVS => {
-						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32) / (self.fregs[inst.rs2 as usize] as f32)) as f64;
-						self.fregs[inst.rd as usize] = temp;
+					Instruction::FDIVS => { //implement
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let temp = unboxed_1 / unboxed_2;
+						self.fregs[inst.rd as usize] = Cpu::box_float(temp);
 					},
 					Instruction::FSQRTS => {
-						let temp: f64 = ((self.fregs[inst.rs1 as usize] as f32).sqrt()) as f64;
-						self.fregs[inst.rd as usize] = temp;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_1.sqrt());
 					},
 					Instruction::FMINS => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
-						if f1 < f2 {
-							self.fregs[inst.rd as usize] = f1 as f64;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						if unboxed_1.is_nan() {
+							if unboxed_2.is_nan() {
+								self.fregs[inst.rd as usize] = Cpu::box_float(f32::NAN);
+							}
+							else {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_2);
+							}
 						}
 						else {
-							self.fregs[inst.rd as usize] = f2 as f64;
+							if unboxed_1 < unboxed_2 {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_1);
+							}
+							else {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_2);
+							}
 						}
 					},
 					Instruction::FMAXS => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
-						if f1 > f2 {
-							self.fregs[inst.rd as usize] = f1 as f64;
+						let unboxed_1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let unboxed_2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						if unboxed_1.is_nan() {
+							if unboxed_2.is_nan() {
+								self.fregs[inst.rd as usize] = Cpu::box_float(f32::NAN);
+							}
+							else {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_2);
+							}
 						}
 						else {
-							self.fregs[inst.rd as usize] = f2 as f64;
+							if unboxed_1 > unboxed_2 {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_1);
+							}
+							else {
+								self.fregs[inst.rd as usize] = Cpu::box_float(unboxed_2);
+							}
 						}
 					},
 					Instruction::FEQS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
 						if f1 == f2 {
 							self.regs[inst.rd as usize] = 1;
 						}
@@ -240,8 +339,8 @@ impl Cpu {
 						}
 					},
 					Instruction::FLTS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
 						if f1 < f2 {
 							self.regs[inst.rd as usize] = 1;
 						}
@@ -250,8 +349,8 @@ impl Cpu {
 						}
 					},
 					Instruction::FLES  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
 						if f1 <= f2 {
 							self.regs[inst.rd as usize] = 1;
 						}
@@ -260,78 +359,78 @@ impl Cpu {
 						}
 					},
 					Instruction::FCVTWS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let s1 = f1.to_bits() as i32;
-						self.regs[inst.rd as usize] = s1 as i64 as u64;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let s1 = f1 as i32 as u32;
+						self.regs[inst.rd as usize] = s1 as u64;
 					},
 					Instruction::FCVTWUS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let s1 = f1.to_bits();
-						self.regs[inst.rd as usize] = s1 as u64;
+						let f1 = Cpu::unbox_float( self.fregs[inst.rs1 as usize]);
+						let s1 = f1 as u32;
+						self.regs[inst.rd as usize] = f1 as u64;
 					},
 					Instruction::FCVTSW => { //this probs doesnt work. Need to conv from i32 to  => f32
 						let s1 = self.regs[inst.rs1 as usize] as i32;
-						let f1 = f32::from_bits(s1 as u32);
-						self.fregs[inst.rd as usize] = f1 as f64;
+						let f1 = s1 as f32;
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1);
 					},
 					Instruction::FCVTSWU  => {
 						let s1 = self.regs[inst.rs1 as usize] as u32;
-						let f1 = f32::from_bits(s1);
-						self.fregs[inst.rd as usize] = f1 as f64;
+						let f1 = s1 as f32;
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1);
 					},
 					Instruction::FCVTLS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let s1 = f1.to_bits() as i64 as u64;
+						let f1 =Cpu::unbox_float( self.fregs[inst.rs1 as usize]);
+						let s1 = f1 as i64 as u64;
 						self.regs[inst.rd as usize] = s1;
 					},
 					Instruction::FCVTLUS  => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let s1 = f1.to_bits() as u64;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let s1 = f1 as u64;
 						self.regs[inst.rd as usize] = s1;
 					},
 					Instruction::FCVTSL  => {
 						let s1 = self.regs[inst.rs1 as usize] as i64;
-						let f1 = f64::from_bits(s1 as u64);
-						self.fregs[inst.rd as usize] = f1;
+						let f1 = s1 as f32;
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1);
 					},
 					Instruction::FCVTSLU  => {
-						let s1 = self.regs[inst.rs1 as usize] as u64;
-						let f1 = f64::from_bits(s1);
-						self.fregs[inst.rd as usize] = f1;
+						let s1 = self.regs[inst.rs1 as usize] as u32;
+						let f1 = s1 as f32;
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1);
 					},
 					Instruction::FSGNJS => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
 						let u1 = f1.to_bits();
 						let u2 = f2.to_bits();
 						let u3 = (u1 & !0x80000000) | (u2 & 0x80000000);
-						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+						self.fregs[inst.rd as usize] =Cpu::box_float(f32::from_bits(u3));
 					},
 					Instruction::FSGNJNS => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float( self.fregs[inst.rs2 as usize]);
 						let u1 = f1.to_bits();
 						let u2 = f2.to_bits();
 						let u3 = (u1 & !0x80000000) | (!u2 & 0x80000000);
-						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+						self.fregs[inst.rd as usize] =Cpu::box_float( f32::from_bits(u3));
 					},
 					Instruction::FSGNJXS => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
-						let f2 = self.fregs[inst.rs2 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 =Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
 						let u1 = f1.to_bits();
 						let u2 = f2.to_bits();
 						let u3 = (u1 & !0x80000000) | ((u2^u1) & 0x80000000);
-						self.fregs[inst.rd as usize] = f32::from_bits(u3) as f64;
+						self.fregs[inst.rd as usize] = Cpu::box_float(f32::from_bits(u3));
 					},
 					Instruction::FMVXW => {
-						let f1 = self.fregs[inst.rs1 as usize] as f32;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
 						let u1 = f1.to_bits();
 						self.regs[inst.rd as usize] = u1 as i32 as i64 as u64; //gotta sign extend
 					},
 					Instruction::FMVWX => {
 						let u1 = self.regs[inst.rs1 as usize] as u32;
 						let f1 = f32::from_bits(u1);
-						self.fregs[inst.rd as usize] = u1 as i32 as f64;
+						self.fregs[inst.rd as usize] = Cpu::box_gloat(f1);
 					},
 					Instruction::FCLASSS => {},
 					_ => (),
@@ -340,22 +439,28 @@ impl Cpu {
 			InstructionFormat::R4(inst) => {
 				match inst.instName {
 					Instruction::FMADDS =>{
-						self.fregs[inst.rd as usize] = ((self.fregs[inst.rs1 as usize] as f32).mul_add(self.fregs[inst.rs2 as usize] as f32, self.fregs[inst.rs3 as usize] as f32)) as f64;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,f3)));
 					},
 					Instruction::FMSUBS =>{
-						self.fregs[inst.rd as usize] = ((self.fregs[inst.rs1 as usize] as f32).mul_add(self.fregs[inst.rs2 as usize] as f32, -(self.fregs[inst.rs3 as usize] as f32))) as f64;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,-f3)));
 					},
-					Instruction::FNMADDS =>{ //neither of these probably work right, not inverting the (f1*f2) i think
-						let f1 = self.fregs[inst.rs1 as usize] as f32;	
-						let f2 = self.fregs[inst.rs2 as usize] as f32;	
-						let f3 = self.fregs[inst.rs3 as usize] as f32;	
-						self.fregs[inst.rd as usize] = (-(f1 * f2) -f3) as f64;
+					Instruction::FNMADDS =>{ 
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
+						self.fregs[inst.rd as usize] = Cpu::box_float((-(f1 * f2) -f3));
 					},
 					Instruction::FNMSUBS =>{
-						let f1 = self.fregs[inst.rs1 as usize] as f32;	
-						let f2 = self.fregs[inst.rs2 as usize] as f32;	
-						let f3 = self.fregs[inst.rs3 as usize] as f32;	
-						self.fregs[inst.rd as usize] = (-(f1 * f2) + f3) as f64;
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
+						self.fregs[inst.rd as usize] = Cpu::box_float(-(f1 * f2) + f3));
 					},
 					_ => panic!("Invalid instruction for R4 format"),
 				}
@@ -433,9 +538,10 @@ impl Cpu {
 						self.regs[inst.rd as usize] = self.pc.wrapping_add(4);
 						self.pc = (self.regs[inst.rs1 as usize].wrapping_add(inst.imm as u64).wrapping_sub(4)) & (u64::MAX-1);
 					},
+					Instruction::FENCE => {},
 					Instruction::FLW => {
 						let floatVal = f32::from_bits(self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as u32);
-						self.fregs[inst.rd as usize] = floatVal as f64; 
+						self.fregs[inst.rd as usize] = Cpu::box_float(floatVal); 
 					},
 					
 					_ => (),

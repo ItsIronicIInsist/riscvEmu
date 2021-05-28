@@ -50,6 +50,8 @@ pub enum Instruction {
 	SRA,
 	OR,
 	AND,
+	FENCE,
+	FENCEI,
 	ADDW, //RV64I instructions
 	SUBW,
 	SLLW,
@@ -118,7 +120,10 @@ pub enum Instruction {
 	FMVXW,
 	FMVWX,
 	FCLASSS,
-
+	FMADDD,
+	FMSUBD,
+	FNMSUBD,
+	FNMADDD,
 }
 
 
@@ -132,15 +137,26 @@ pub struct R3Inst {
 	pub instName: Instruction,
 }
 
-//PLACEHOLDER
 impl R3Inst {
 	pub fn New(code: u32) -> R3Inst {
+		let opcode = code & 0x7f;
+		let funct2 = (code >> 25) & 0x3;
 		let inst = R3Inst {
-			rs1: 0,
-			rs2: 0,
-			rs3: 0,
-			rd: 0,
-			instName: Instruction::ADD,
+			rs1: ((code >> 15) & 0x1f) as u8,
+			rs2: ((code >> 20) & 0x1f) as u8,
+			rs3: ((code>> 27) & 0x1f) as u8,
+			rd: ((code >> 7) & 0x1f) as u8,
+			instName: match (funct2, opcode) {
+				(0, 67) => Instruction::FMADDS,
+				(1, 67) => Instruction::FMADDD,
+				(0, 71) => Instruction::FMSUBS,
+				(1, 71) => Instruction::FMSUBD,
+				(0, 75) => Instruction::FNMSUBS,
+				(1, 75) => Instruction::FNMSUBD,
+				(0, 79) => Instruction::FNMADDS,
+				(1, 79) => Instruction::FNMADDD,
+				(_,_) => panic!("Invalid R4 type instruction opcode"),
+			}
 		};
 		inst
 	}
@@ -343,6 +359,15 @@ impl RegImmInst {
 				let inst = RegImmInst {
 					rd: (((code >> 7) & 0x1f) as u8),
 					instName: Instruction::JALR,
+					rs1: (((code >> 15) & 0x1f) as u8),
+					imm: (((code as i32) >> 20) as i16),
+				};
+				inst
+			}
+			15 => { //technically need to differentiate btn FENCE and FENCEI. But. I dont implement either, as emulator is singe threaded
+				let inst = RegImmInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					instName: Instruction::FENCE,
 					rs1: (((code >> 15) & 0x1f) as u8),
 					imm: (((code as i32) >> 20) as i16),
 				};
