@@ -120,10 +120,38 @@ pub enum Instruction {
 	FMVXW,
 	FMVWX,
 	FCLASSS,
-	FMADDD,
+	FMADDD, //RV64D (Not all isnt yet)
 	FMSUBD,
 	FNMSUBD,
 	FNMADDD,
+	CSRRW, //RV64CSR
+	CSRRS,
+	CSRRC,
+	CSRRWI,
+	CSRRSI,
+	CSRRCI,
+	AMOADDW, //RV64A
+	AMOADDD,
+	AMOANDW,
+	AMOANDD,
+	AMOORW,
+	AMOORD,
+	AMOXORW,
+	AMOXORD,
+	AMOMAXW,
+	AMOMAXD,
+	AMOMAXUW,
+	AMOMAXUD,
+	AMOMINW,
+	AMOMIND,
+	AMOMINUW,
+	AMOMINUD,
+	AMOSWAPW,
+	AMOSWAPD,
+	LRW,
+	SCW,
+	LRD,
+	SCD,
 }
 
 
@@ -180,85 +208,138 @@ impl RegRegInst {
 		let funct7 = (code >> 25) & 0x7f;
 		let opcode = code & 0x7f;
 
-		if opcode == 51 {
-			if funct7 == 1 {
-			//RV32M inst
-				let inst = RegRegInst {
-					rd: (((code >> 7) & 0x1f) as u8),
-					rs1: (((code >> 15) & 0x1f) as u8),
-					rs2: (((code >> 20) & 0x1f) as u8),
-					instName: match funct3 {
-						0 => Instruction::MUL,
-						1 => Instruction::MULH,
-						2 => Instruction::MULHSU,
-						3 => Instruction::MULHU,
-						4 => Instruction::DIV,
-						5 => Instruction::DIVU,
-						6 => Instruction::REM,
-						7 => Instruction::REMU,
-						_=> panic!("Invalid R-type opcode 32 bit RV32M"),
-					}
-				};
-				inst
-			}
-			else {
-			//RV32I inst
-				let inst = RegRegInst {
-					rd: (((code >> 7) & 0x1f) as u8),
-					rs1: (((code >> 15) & 0x1f) as u8),
-					rs2: (((code >> 20) & 0x1f) as u8),
-					instName: match (funct7, funct3) {
-						(0,0) => Instruction::ADD,
-						(32,0) => Instruction::SUB,
-						(0,1) => Instruction::SLL,
-						(0,2) => Instruction::SLT,
-						(0,3) => Instruction::SLTU,
-						(0,4) => Instruction::XOR,
-						(0,5) => Instruction::SRL,
-						(32,5) => Instruction::SRA,
-						(0,6) => Instruction::OR,
-						(0,7) => Instruction::AND,
-						_=> panic!("Invalid R-type opcode 32 bit RV32I"),
-					}
-				};
-				inst
-			}
-		}
-		else {
-			if funct7 == 1 {
-			//RV64M instructions
-				let inst = RegRegInst {
-					rd: (((code >> 7) & 0x1f) as u8),
-					rs1: (((code >> 15) & 0x1f) as u8),
-					rs2: (((code >> 20) & 0x1f) as u8),
-					instName: match funct3 {
-						0 => Instruction::MULW,
-						4 => Instruction::DIVW,
-						5 => Instruction::DIVUW,
-						6 => Instruction::REMW,
-						7 => Instruction::REMUW,
-						_=> panic!("Invalid R-type 64bit funct RV64I" ),
-					}
-				};
-				inst
-			}
-			else {
-			//RV64I instructions
-				let inst = RegRegInst {
-					rd: (((code >> 7) & 0x1f) as u8),
-					rs1: (((code >> 15) & 0x1f) as u8),
-					rs2: (((code >> 20) & 0x1f) as u8),
-					instName: match (funct7, funct3) {
-						(0,0) => Instruction::ADDW,
-						(32,0) => Instruction::SUBW,
-						(0,1) => Instruction::SLLW,
-						(32,5) => Instruction::SRAW,
-						(0,5) => Instruction::SRLW,
-						_=> panic!("Invalid R-type 64bit funct RV64I" ),
-					}
-				};
-				inst
-			}
+		match opcode  {
+			51 => {
+				if funct7 == 1 {
+				//RV32M inst
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match funct3 {
+							0 => Instruction::MUL,
+							1 => Instruction::MULH,
+							2 => Instruction::MULHSU,
+							3 => Instruction::MULHU,
+							4 => Instruction::DIV,
+							5 => Instruction::DIVU,
+							6 => Instruction::REM,
+							7 => Instruction::REMU,
+							_=> panic!("Invalid R-type opcode 32 bit RV32M"),
+						}
+					};
+					inst
+				}
+				else {
+				//RV32I inst
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match (funct7, funct3) {
+							(0,0) => Instruction::ADD,
+							(32,0) => Instruction::SUB,
+							(0,1) => Instruction::SLL,
+							(0,2) => Instruction::SLT,
+							(0,3) => Instruction::SLTU,
+							(0,4) => Instruction::XOR,
+							(0,5) => Instruction::SRL,
+							(32,5) => Instruction::SRA,
+							(0,6) => Instruction::OR,
+							(0,7) => Instruction::AND,
+							_=> panic!("Invalid R-type opcode 32 bit RV32I"),
+						}
+					};
+					inst
+				}
+			},
+			59 => {
+				if funct7 == 1 {
+				//RV64M instructions
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match funct3 {
+							0 => Instruction::MULW,
+							4 => Instruction::DIVW,
+							5 => Instruction::DIVUW,
+							6 => Instruction::REMW,
+							7 => Instruction::REMUW,
+							_=> panic!("Invalid R-type 64bit funct RV64I" ),
+						}
+					};
+					inst
+				}
+				else {
+				//RV64I instructions
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match (funct7, funct3) {
+							(0,0) => Instruction::ADDW,
+							(32,0) => Instruction::SUBW,
+							(0,1) => Instruction::SLLW,
+							(32,5) => Instruction::SRAW,
+							(0,5) => Instruction::SRLW,
+							_=> panic!("Invalid R-type 64bit funct RV64I" ),
+						}
+					};
+					inst
+				}
+			},
+			47 => {
+				//adjusting for aq/rl bits, so its really more a funct5
+				let funct7 = funct7 >> 2;
+				//RV32A Instructions
+				if funct3 == 2 {
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match (funct7) {
+							(0) => Instruction::AMOADDW,
+							(1) => Instruction::AMOSWAPW,
+							(2) => Instruction::LRW,
+							(3) => Instruction::SCW,
+							(4) => Instruction::AMOXORW,
+							(8) => Instruction::AMOORW,
+							(12) => Instruction::AMOANDW,
+							(16) => Instruction::AMOMINW,
+							(20) => Instruction::AMOMAXW,
+							(24) => Instruction::AMOMINUW,
+							(28) => Instruction::AMOMAXUW,
+							_=> panic!("Invalid R-type 64bit funct RV32a" ),
+						}
+					};
+					inst
+				}
+				//RV64A Instructions
+				else {
+					let inst = RegRegInst {
+						rd: (((code >> 7) & 0x1f) as u8),
+						rs1: (((code >> 15) & 0x1f) as u8),
+						rs2: (((code >> 20) & 0x1f) as u8),
+						instName: match (funct7) {
+							(0) => Instruction::AMOADDD,
+							(1) => Instruction::AMOSWAPD,
+							(2) => Instruction::LRD,
+							(3) => Instruction::SCD,
+							(4) => Instruction::AMOXORD,
+							(8) => Instruction::AMOORD,
+							(12) => Instruction::AMOANDD,
+							(16) => Instruction::AMOMIND,
+							(20) => Instruction::AMOMAXD,
+							(24) => Instruction::AMOMINUD,
+							(28) => Instruction::AMOMAXUD,
+							_=> panic!("Invalid R-type 64bit funct RV64A" ),
+						}
+					};
+					inst
+				}
+			},
+			_ => {panic!("Invalid opcode for R type instruction");},
 		}
 	}
 }
@@ -370,6 +451,23 @@ impl RegImmInst {
 					instName: Instruction::FENCE,
 					rs1: (((code >> 15) & 0x1f) as u8),
 					imm: (((code as i32) >> 20) as i16),
+				};
+				inst
+			}
+			115 => { //CSR Instructions
+				let inst = RegImmInst {
+					rd: (((code >> 7) & 0x1f) as u8),
+					instName: match ((code >> 12) & 0x7) {
+						1 => Instruction::CSRRW,
+						2 => Instruction::CSRRS,
+						3 => Instruction::CSRRC,
+						5 => Instruction::CSRRWI,
+						6 => Instruction::CSRRSI,
+						7 => Instruction::CSRRCI,
+						_ => panic!("Invalid immeidate funct val"),
+					},
+					rs1: (((code >> 15) & 0x1f) as u8),
+					imm: (((code as u32) >> 20) as i16), //this is CSR offset
 				};
 				inst
 			}
@@ -541,7 +639,68 @@ impl JumpInst {
 	}
 }
 
+//user level csrs
+pub const USTATUS: usize = 0x0;
+pub const UIE: usize = 0x4;
+pub const UTVEC: usize = 0x5; 
+pub const USCRATCH: usize = 0x40;
+pub const UEPC: usize = 0x41;
+pub const UCAUSE: usize = 0x42;
+pub const UBADADDR: usize = 0x43; 
+pub const UIP: usize = 0x44;
+pub const CYCLE: usize = 0xc00;
+pub const TIME: usize = 0xc01;
+pub const INSTRET: usize = 0xc02;
 
+// Machine-level CSRs.
+// Hardware thread ID.
+pub const MHARTID: usize = 0xf14;
+// Machine status register.
+pub const MSTATUS: usize = 0x300;
+//ISA and extensions
+pub const MIFA: usize = 0x301;
+// Machine exception delefation register.
+pub const MEDELEG: usize = 0x302;
+// Machine interrupt delefation register.
+pub const MIDELEG: usize = 0x303;
+// Machine interrupt-enable register.
+pub const MIE: usize = 0x304;
+// Machine trap-handler base address.
+pub const MTVEC: usize = 0x305;
+// Machine counter enable.
+pub const MCOUNTEREN: usize = 0x306;
+// Scratch register for machine trap handlers.
+pub const MSCRATCH: usize = 0x340;
+// Machine exception program counter.
+pub const MEPC: usize = 0x341;
+// Machine trap cause.
+pub const MCAUSE: usize = 0x342;
+// Machine bad address or instruction.
+pub const MTBADADDR: usize = 0x343;
+// Machine interrupt pending.
+pub const MIP: usize = 0x344;
 
-
+// Supervisor-level CSRs.
+// Supervisor status register.
+pub const SSTATUS: usize = 0x100;
+//exception delegaiton register
+pub const SEDELEG: usize = 0x102;
+//interrupt delegaiton register
+pub const SIDELEG: usize = 0x103;
+// Supervisor interrupt-enable register.
+pub const SIE: usize = 0x104;
+// Supervisor trap handler base address.
+pub const STVEC: usize = 0x105;
+// Scratch register for supervisor trap handlers.
+pub const SSCRATCH: usize = 0x140;
+// Supervisor exception program counter.
+pub const SEPC: usize = 0x141;
+// Supervisor trap cause.
+pub const SCAUSE: usize = 0x142;
+// Supervisor bad address or instruction.
+pub const SBADADDR: usize = 0x143;
+// Supervisor interrupt pending.
+pub const SIP: usize = 0x144;
+// Supervisor address translation and protection.
+pub const SATP: usize = 0x180;
 
