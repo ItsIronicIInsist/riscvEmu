@@ -5,12 +5,16 @@ Project to become more familiar with both rust and riscv assembly
 
 Aiming to have full support for RV64G (IMAFD+csr) + some hardware peripherals
 
-Single threader so fence and atomic instructions arent proper implementations
+Single threaded so fence and atomic instructions arent proper implementations
 
 
 Currently working on:
 
-RV64-CSR
+RV64-CSR (testing)
+
+RV64A (testing)
+
+Implementing privilege levels
 
 RV64-F (implementing edge stuff)
 
