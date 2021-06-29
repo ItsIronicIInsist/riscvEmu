@@ -2,17 +2,20 @@
 
 use crate::regs::*;
 use crate::bus::Bus;
-
+use std::cmp;
 
 //Struct for Cpu
 pub struct Cpu {
 	pub regs: [u64;32], //registers. RISC-V has 32 of them. 64 bitwide of course, bc 64bit arch
-	pub fregs: [f64;32],
-	pub fcsr: u32,
+	pub fregs: [f64;32], //floating point registers
+	pub fcsr: u32, //float control csr
+	pub csrs: [u64; 4096], //csr registers
 	pub pc: u64, //program counter
 	pub bus: Bus,
+	pub prv: privilege_level, //privilege
 }
 
+//rounding mode for float instructoins
 enum rounding_mode {
 	RNE = 0,
 	RTZ = 1,
@@ -20,6 +23,13 @@ enum rounding_mode {
 	RUP = 3,
 	RMM = 4,
 	DYN = 7,
+}
+
+//privilege elvel of the CPU
+pub enum privilege_level {
+	U = 0, //user
+	S = 1, //supervisor
+	M = 3, //machine
 }
 
 impl Cpu {
@@ -30,8 +40,10 @@ impl Cpu {
 						//that r0 is a special register - the zero register. Must always be = 0
 			fregs: [0.0;32],
 			fcsr: 0,
+			csrs: [0;4096],
 			pc: 0,
 			bus: Bus::New(code),
+			prv: privilege_level::M,
 		};
 		cpu.regs[2] = 1024*1024; //r2 is stack register. Stack grows downwards,
 								//so r2 must be a non zero value. THis val was chosen at random
@@ -62,14 +74,24 @@ impl Cpu {
 		NaNFloat
 	}
 
+	//these need some sort of wrapper so that supervisor cant freely access/change machine level csrs
+	pub fn load_csr(&self, addr: usize) -> u64 {
+		self.csrs[addr]
+	}
+
+	pub fn store_csr(&mut self, addr: usize, val: u64) {
+		self.csrs[addr] = val;
+	}
+
+
 	pub fn round_float(&self, num:f32) -> f32 {
-		let rounding_mode = (self.fscr >> 5) & 0x7;
+		let rounding_mode = (self.fcsr >> 5) & 0x7;
 		match rounding_mode {
 			RNE => { //round to nearest, ties to even
-				let mut temp = num.round()
+				let mut temp = num.round();
 				if num.fract() == 0.5 {
 					if num % 2.0 == 1.0 {
-						if num < 0 {
+						if num < 0.0 {
 							temp = num.floor();
 						}
 						else {
@@ -77,21 +99,25 @@ impl Cpu {
 						}
 					}
 				}
+				temp
 			},
 			RTZ => {
-				num.trunc()
+				num.trunc();
+				num
 			},
 			RDN => {
-				num.round()
+				num.round();
+				num
 			},
 			RUP => {
-				num.ceil()
+				num.ceil();
+				num
 			},
 			RMM => { //round to nearest, ties to larger max
-				let mut temp = num.round()
-				if abs(temp) < abs(num) {
+				let mut temp = num.round();
+				if temp.abs() < num.abs() {
 					if num.fract() == 0.5 {
-						if num < 0 {
+						if num < 0.0 {
 							temp = num.floor();
 						}
 						else {
@@ -99,10 +125,11 @@ impl Cpu {
 						}
 					}
 				}
+				temp
 			},
 			//panic here??
-			DYN => {},
-			_ => {},
+			DYN => {panic!("dyn rounding mode unsupported");},
+			_ => {panic!("invalid rounding mode");},
 		}
 	}
 
@@ -430,37 +457,139 @@ impl Cpu {
 					Instruction::FMVWX => {
 						let u1 = self.regs[inst.rs1 as usize] as u32;
 						let f1 = f32::from_bits(u1);
-						self.fregs[inst.rd as usize] = Cpu::box_gloat(f1);
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1);
 					},
 					Instruction::FCLASSS => {},
+					Instruction::AMOADDW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], data.wrapping_add(self.regs[inst.rs2 as usize] as i32) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOADDD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], data.wrapping_add(self.regs[inst.rs2 as usize] as i64) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOSWAPW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i64) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOSWAPD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i32) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOORW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], (data | (self.regs[inst.rs2 as usize] as i32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOORD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], (data | (self.regs[inst.rs2 as usize] as i64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOXORW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], (data ^ (self.regs[inst.rs2 as usize] as i32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOXORD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], (data ^ (self.regs[inst.rs2 as usize] as i64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOANDW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], (data & (self.regs[inst.rs2 as usize] as i32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOANDD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], (data & (self.regs[inst.rs2 as usize] as i64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMAXW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::max(data,(self.regs[inst.rs2 as usize] as i32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMAXD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::max(data, (self.regs[inst.rs2 as usize] as i64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMAXUW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as u32;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::max(data, (self.regs[inst.rs2 as usize] as u32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMAXUD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8);
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::max(data, (self.regs[inst.rs2 as usize])) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMINW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::min(data, (self.regs[inst.rs2 as usize] as i32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMIND => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::min(data, (self.regs[inst.rs2 as usize] as i64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::AMOMINUW => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as u32;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::min(data, (self.regs[inst.rs2 as usize] as u32)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					},
+					Instruction::AMOMINUD => {
+						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as u64;
+						self.bus.store(self.regs[inst.rs1 as usize], cmp::min(data, (self.regs[inst.rs2 as usize] as u64)) as u64, 8);
+						self.regs[inst.rd as usize] = data as u64;
+					}, 
+					Instruction::LRW => {
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1 as usize],4) as i32 as u64;
+					}, 
+					Instruction::LRD => {
+						self.regs[inst.rd as usize] = self.bus.load(self.regs[inst.rs1 as usize],8) as i64 as u64;
+					}, 
+					Instruction::SCW => {
+						self.bus.store(self.regs[inst.rs1 as usize], self.regs[inst.rs2 as usize], 4);
+					}, 
+					Instruction::SCD => {
+						self.bus.store(self.regs[inst.rs1 as usize], self.regs[inst.rs2 as usize], 8);
+					}, 
 					_ => (),
 				}
 			},
 			InstructionFormat::R4(inst) => {
 				match inst.instName {
 					Instruction::FMADDS =>{
-						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
-						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
-						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
-						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,f3)));
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize]);
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,f3));
 					},
 					Instruction::FMSUBS =>{
-						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
-						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
-						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
-						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,-f3)));
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize]);
+						self.fregs[inst.rd as usize] = Cpu::box_float(f1.mul_add(f2,-f3));
 					},
 					Instruction::FNMADDS =>{ 
-						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
-						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
-						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize]);
 						self.fregs[inst.rd as usize] = Cpu::box_float((-(f1 * f2) -f3));
 					},
 					Instruction::FNMSUBS =>{
-						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize])
-						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize])
-						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize])
-						self.fregs[inst.rd as usize] = Cpu::box_float(-(f1 * f2) + f3));
+						let f1 = Cpu::unbox_float(self.fregs[inst.rs1 as usize]);
+						let f2 = Cpu::unbox_float(self.fregs[inst.rs2 as usize]);
+						let f3 = Cpu::unbox_float(self.fregs[inst.rs3 as usize]);
+						self.fregs[inst.rd as usize] = Cpu::box_float((-(f1 * f2) + f3));
 					},
 					_ => panic!("Invalid instruction for R4 format"),
 				}
@@ -542,6 +671,42 @@ impl Cpu {
 					Instruction::FLW => {
 						let floatVal = f32::from_bits(self.bus.load(self.regs[inst.rs1  as usize].wrapping_add(inst.imm as u64), 4) as u32);
 						self.fregs[inst.rd as usize] = Cpu::box_float(floatVal); 
+					},
+					Instruction::CSRRW => {
+						if(inst.rd != 0) {
+							self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						}
+						self.store_csr(inst.imm as u16 as usize, self.regs[inst.rs1 as usize]);
+					},
+					Instruction::CSRRS => {
+						self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						if(inst.rs1 != 0) { //a bit mask. Any high bits in the rs1 register set the corresponding bit in csr as high
+							self.store_csr(inst.imm as u16 as usize, self.regs[inst.rd as usize] | self.regs[inst.rs1 as usize]);
+						}
+					},
+					Instruction::CSRRC => {
+						self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						if(inst.rs1 != 0) { //a bit mask. Any high bits in the rs1 register set the corresponding bit in csr as low
+							self.store_csr(inst.imm as u16 as usize, self.regs[inst.rd as usize] & !(self.regs[inst.rs1 as usize]));
+						}
+					},
+					Instruction::CSRRWI => {
+						if(inst.rd != 0) {
+							self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						}
+						self.store_csr(inst.imm as u16 as usize, inst.rs1 as u64);
+					},
+					Instruction::CSRRSI => {
+						self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						if(inst.rs1 != 0) { //a bit mask. Any high bits in the rs1 register set the corresponding bit in csr as high
+							self.store_csr(inst.imm as u16 as usize, self.regs[inst.rd as usize] | (inst.rs1 as u64));
+						}
+					},
+					Instruction::CSRRCI => {
+						self.regs[inst.rd as usize] = self.load_csr(inst.imm as usize);
+						if(inst.rs1 != 0) { //a bit mask. Any high bits in the rs1 register set the corresponding bit in csr as high
+							self.store_csr(inst.imm as u16 as usize, self.regs[inst.rd as usize] & !(inst.rs1 as u64));
+						}
 					},
 					
 					_ => (),
