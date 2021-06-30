@@ -12,8 +12,6 @@ Currently working on:
 
 RV64-CSR (testing)
 
-RV64A (testing)
-
 Implementing privilege levels
 
 RV64-F (implementing edge stuff)
@@ -22,3 +20,5 @@ Currently have support for:
 RV64I (Exluding fence, ecall, ebreak)
 
 RV64M
+
+RV64A (Emulator is single threaded so not 'truly' atomic
