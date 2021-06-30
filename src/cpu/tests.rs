@@ -3044,16 +3044,16 @@ fn FSGNJXS_test() {
 
 #[test]
 fn FMADDS_test() {
-	let fakeDat : Vec<u8> = vec![0;10];
-	let mut cpu = Cpu::new(faleData);
-	let mut inst = R3Inst {
+	let fakeData : Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = R4Inst {
 		rd: 0,
 		rs1: 1,
 		rs2: 2,
 		rs3: 3,
 		instName: Instruction::FMADDS,
 	};
-	let instFmt = InstructionFormat::R3(inst);
+	let instFmt = InstructionFormat::R4(inst);
 
 	cpu.fregs[1] = Cpu::box_float(1.0);
 	cpu.fregs[2] = Cpu::box_float(-2.0);
@@ -3084,16 +3084,16 @@ fn FMADDS_test() {
 
 #[test]
 fn FMSUBS_test() {
-	let fakeDat : Vec<u8> = vec![0;10];
-	let mut cpu = Cpu::new(faleData);
-	let mut inst = R3Inst {
+	let fakeData : Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = R4Inst {
 		rd: 0,
 		rs1: 1,
 		rs2: 2,
 		rs3: 3,
 		instName: Instruction::FMSUBS,
 	};
-	let instFmt = InstructionFormat::R3(inst);
+	let instFmt = InstructionFormat::R4(inst);
 
 	cpu.fregs[1] = Cpu::box_float(1.0);
 	cpu.fregs[2] = Cpu::box_float(-2.0);
@@ -3123,16 +3123,16 @@ fn FMSUBS_test() {
 
 #[test]
 fn FNMADDS_test() {
-	let fakeDat : Vec<u8> = vec![0;10];
-	let mut cpu = Cpu::new(faleData);
-	let mut inst = R3Inst {
+	let fakeData : Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = R4Inst {
 		rd: 0,
 		rs1: 1,
 		rs2: 2,
 		rs3: 3,
 		instName: Instruction::FNMADDS,
 	};
-	let instFmt = InstructionFormat::R3(inst);
+	let instFmt = InstructionFormat::R4(inst);
 
 	cpu.fregs[1] = Cpu::box_float(1.0);
 	cpu.fregs[2] = Cpu::box_float(-2.0);
@@ -3161,16 +3161,16 @@ fn FNMADDS_test() {
 }
 #[test]
 fn FNMSUBS_test() {
-	let fakeDat : Vec<u8> = vec![0;10];
-	let mut cpu = Cpu::new(faleData);
-	let mut inst = R3Inst {
+	let fakeData : Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = R4Inst {
 		rd: 0,
 		rs1: 1,
 		rs2: 2,
 		rs3: 3,
 		instName: Instruction::FNMSUBS,
 	};
-	let instFmt = InstructionFormat::R3(inst);
+	let instFmt = InstructionFormat::R4(inst);
 
 	cpu.fregs[1] = Cpu::box_float(1.0);
 	cpu.fregs[2] = Cpu::box_float(-2.0);
@@ -3196,4 +3196,757 @@ fn FNMSUBS_test() {
 	cpu.fregs[3] = Cpu::box_float(-0.5*f32::powi(10.0,16)); 
 	cpu.execute(instFmt);
 	assert_eq!(Cpu::unbox_float(cpu.fregs[0]), 2.5*f32::powi(10.0,16));
+}
+
+
+
+
+#[test]
+fn AMOADDD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOADDD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64,-1);
+	assert_eq!(cpu.bus.load(0,8), 0);
+}
+
+
+#[test]
+fn AMOADDW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOADDW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+
+	cpu.bus.store(0,u32::MAX as u64,4);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i32,-1);
+	assert_eq!(cpu.bus.load(0,8), 0);
+}
+
+
+#[test]
+fn AMOSWAPD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOSWAPD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64,-1);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+
+#[test]
+fn AMOSWAPW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOSWAPW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+
+	
+	cpu.bus.store(0,u32::MAX as u64,4);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64,-1);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+
+#[test]
+fn AMOORD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOORD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX);
+
+	
+	cpu.bus.store(0,u64::MAX -1,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64,-2);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX );
+}
+
+
+#[test]
+fn AMOORW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOORW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.regs[2] = u32::MAX  as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX);
+
+	
+	cpu.bus.store(0,u64::MAX -1,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64,-2);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX);
+}
+
+#[test]
+fn AMOANDD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOANDD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 0);
+
+	cpu.bus.store(0,10,8);
+	cpu.regs[2] = u64::MAX - 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	
+	cpu.regs[2] = 8;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 8);
+}
+
+
+#[test]
+fn AMOANDW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOANDW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 0);
+
+	cpu.bus.store(0,10,8);
+	cpu.regs[2] = u32::MAX  as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	
+	cpu.bus.store(0,(u32::MAX as u64)+1,8);
+	cpu.regs[2] = 10;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 0);
+}
+
+
+#[test]
+fn AMOXORD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOXORD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.regs[2] = u64::MAX - 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), !(10));
+
+	
+	cpu.bus.store(0,9,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 8);
+}
+
+
+#[test]
+fn AMOXORW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOXORW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 11);
+
+	cpu.bus.store(0,10,8);
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), !(10));
+
+	
+	cpu.bus.store(0,u32::MAX as u64,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX -1);
+}
+
+#[test]
+fn AMOMAXD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMAXD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64, -1);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+#[test]
+fn AMOMAXW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMAXW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	
+	cpu.bus.store(0, u32::MAX as u64,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64, -1);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+#[test]
+fn AMOMAXUD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMAXUD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], u64::MAX);
+	assert_eq!(cpu.bus.load(0,8), u64::MAX);
+}
+
+#[test]
+fn AMOMAXUW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMAXUW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 10);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,4), u32::MAX as u64);
+
+	
+	cpu.bus.store(0,u32::MAX as u64,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], u32::MAX as u64);
+	assert_eq!(cpu.bus.load(0,4), u32::MAX as u64);
+}
+
+#[test]
+fn AMOMIND_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMIND,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64, -1);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+}
+
+#[test]
+fn AMOMINW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMINW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+
+	
+	cpu.bus.store(0,u32::MAX as u64,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3] as i64, -1);
+	assert_eq!(cpu.bus.load(0,8) as i64, -1);
+}
+
+
+#[test]
+fn AMOMINUD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMINUD,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u64::MAX;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	
+	cpu.bus.store(0,u64::MAX,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], u64::MAX);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+#[test]
+fn AMOMINUW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+		instName: Instruction::AMOMINUW,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.regs[1] = 0;
+	cpu.regs[2] = 1;
+	
+	cpu.bus.store(0,10,8);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],10);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	cpu.regs[2] = u32::MAX as u64;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 1);
+
+	
+	cpu.bus.store(0, u32::MAX as u64,8);
+	cpu.regs[2] = 1;
+	instFmt = InstructionFormat::R(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], u32::MAX as u64);
+	assert_eq!(cpu.bus.load(0,8), 1);
+}
+
+
+#[test]
+fn LRW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		instName: Instruction::LRW,
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.bus.store(0,0x10,1);
+	cpu.regs[1] = 0;
+
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x10);
+	
+	cpu.bus.store(0,0x20,8);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x20);
+
+	cpu.bus.store(3, 0x4142434445464748, 8);
+	cpu.regs[1] = 3;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x45464748);
+
+	cpu.bus.store(0,0xffffffff,4);
+	cpu.regs[1] = 0;
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3] as i64, -1);
+}
+
+
+#[test]
+fn LRD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		instName: Instruction::LRD,
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+	};
+	let mut instFmt = InstructionFormat::R(inst);
+	cpu.bus.store(0,0x10,1);
+	cpu.regs[1] = 0;
+
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x10);
+	
+	cpu.bus.store(0,0x20,8);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x20);
+
+	cpu.bus.store(3, 0x4142434445464748, 8);
+	cpu.regs[1] = 3;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0x4142434445464748);
+
+	cpu.bus.store(0,0xffffffffffffffff,8);
+	cpu.regs[1] = 0;
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3] as i64, -1);
+}
+
+
+#[test]
+fn SCW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		instName: Instruction::SCW,
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+	};
+	let mut instFmt  = InstructionFormat::R(inst);
+	cpu.regs[2] = 0x10;
+	cpu.regs[1] = 0;
+	cpu.execute(instFmt);
+	
+	assert_eq!(cpu.bus.load(0,4),0x10);
+
+	cpu.regs[2] = 0x2010;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,4), 0x2010);
+
+	cpu.regs[1] = 0x4;
+	cpu.regs[2] = 0x302010;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(4,4), 0x302010);
+
+	cpu.regs[2] = 0x40302010;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(4,4), 0x40302010);
+
+}
+
+
+#[test]
+fn SCD_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegRegInst {
+		instName: Instruction::SCD,
+		rs1: 1,
+		rs2: 2,
+		rd: 3,
+	};
+	let mut instFmt  = InstructionFormat::R(inst);
+	cpu.regs[2] = 0x10;
+	cpu.regs[1] = 0;
+	cpu.execute(instFmt);
+	
+	assert_eq!(cpu.bus.load(0,8),0x10);
+
+	cpu.regs[2] = 0x2010;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(0,8), 0x2010);
+
+	cpu.regs[1] = 0x4;
+	cpu.regs[2] = 0x8070605040302010;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.bus.load(4,8), 0x8070605040302010);
+
+
 }
