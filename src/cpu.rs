@@ -472,12 +472,12 @@ impl Cpu {
 					},
 					Instruction::AMOSWAPW => {
 						let data = self.bus.load(self.regs[inst.rs1 as usize],4) as i32;
-						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i64) as u64, 8);
+						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i32) as u64, 8);
 						self.regs[inst.rd as usize] = data as u64;
 					},
 					Instruction::AMOSWAPD => {
 						let data = self.bus.load(self.regs[inst.rs1 as usize],8) as i64;
-						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i32) as u64, 8);
+						self.bus.store(self.regs[inst.rs1 as usize], (self.regs[inst.rs2 as usize] as i64) as u64, 8);
 						self.regs[inst.rd as usize] = data as u64;
 					},
 					Instruction::AMOORW => {

@@ -11,7 +11,7 @@
 #[derive(Copy,Clone)]
 pub enum InstructionFormat { 
 	R(RegRegInst), 
-	R4(R3Inst),
+	R4(R4Inst),
 	I(RegImmInst),
 	S(StoreInst),
 	B(BranchInst),
@@ -157,7 +157,7 @@ pub enum Instruction {
 
 #[derive(Debug)]
 #[derive(Copy,Clone)]
-pub struct R3Inst {
+pub struct R4Inst {
 	pub rs1: u8,
 	pub rs2: u8,
 	pub rs3: u8,
@@ -165,11 +165,11 @@ pub struct R3Inst {
 	pub instName: Instruction,
 }
 
-impl R3Inst {
-	pub fn New(code: u32) -> R3Inst {
+impl R4Inst {
+	pub fn New(code: u32) -> R4Inst {
 		let opcode = code & 0x7f;
 		let funct2 = (code >> 25) & 0x3;
-		let inst = R3Inst {
+		let inst = R4Inst {
 			rs1: ((code >> 15) & 0x1f) as u8,
 			rs2: ((code >> 20) & 0x1f) as u8,
 			rs3: ((code>> 27) & 0x1f) as u8,
