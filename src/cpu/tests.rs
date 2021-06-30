@@ -3950,3 +3950,180 @@ fn SCD_test() {
 
 
 }
+
+
+
+
+
+
+#[test]
+fn CSRRS_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		imm: 0,
+		rd: 3,
+		instName: Instruction::CSRRS,
+	};
+	cpu.regs[1] = 1;
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],0);
+	assert_eq!(cpu.csrs[0],1);
+
+	cpu.regs[1] = u64::MAX;
+
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 1);
+	assert_eq!(cpu.csrs[0], u64::MAX);
+
+	inst.imm = 10;
+
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	
+	assert_eq!(cpu.regs[3], 0);
+	assert_eq!(cpu.csrs[10], u64::MAX);
+}
+
+#[test]
+fn CSRRSI_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		rd: 2,
+		instName: Instruction::CSRRSI,
+		imm: 0,
+	};
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],0);
+	assert_eq!(cpu.csrs[0],1);
+
+	inst.imm = 10;
+	inst.rs1 = 24;
+	instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0);
+	assert_eq!(cpu.csrs[10], 24);
+}
+
+#[test]
+fn CSRRC_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		imm: 0,
+		rd: 3,
+		instName: Instruction::CSRRC,
+	};
+	cpu.regs[1] = 1;
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],0);
+	assert_eq!(cpu.csrs[0],0);
+
+	cpu.csrs[0] = 9;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 9);
+	assert_eq!(cpu.csrs[0], 8);
+
+	inst.imm = 10;
+	cpu.regs[1] = u64::MAX;
+
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	
+	assert_eq!(cpu.regs[3], 0);
+	assert_eq!(cpu.csrs[10], 0);
+}
+
+
+#[test]
+fn CSRRCI_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		rd: 2,
+		instName: Instruction::CSRRCI,
+		imm: 0,
+	};
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],0);
+	assert_eq!(cpu.csrs[0],0);
+
+	inst.imm = 10;
+	cpu.csrs[10] = 9;
+	inst.rs1 = 1;
+	instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 0);
+	assert_eq!(cpu.csrs[10], 8);
+}
+
+
+#[test]
+fn CSRRW_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		imm: 0,
+		rd: 3,
+		instName: Instruction::CSRRW,
+	};
+	cpu.regs[1] = 1;
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[3],0);
+	assert_eq!(cpu.csrs[0],1);
+
+	cpu.csrs[0] = 9;
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[3], 9);
+	assert_eq!(cpu.csrs[0], 1);
+
+	inst.imm = 10;
+	cpu.regs[1] = u64::MAX;
+
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	
+	assert_eq!(cpu.regs[3], 0);
+	assert_eq!(cpu.csrs[10], u64::MAX);
+}
+
+
+#[test]
+fn CSRRWI_test() {
+	let fakeData: Vec<u8> = vec![0;10];
+	let mut cpu = Cpu::new(fakeData);
+	let mut inst = RegImmInst {
+		rs1: 1,
+		rd: 2,
+		instName: Instruction::CSRRWI,
+		imm: 0,
+	};
+	let mut instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+
+	assert_eq!(cpu.regs[2],0);
+	assert_eq!(cpu.csrs[0],1);
+
+	inst.imm = 10;
+	cpu.csrs[10] = 9;
+	instFmt = InstructionFormat::I(inst);
+	cpu.execute(instFmt);
+	assert_eq!(cpu.regs[2], 9);
+	assert_eq!(cpu.csrs[10], 1);
+}
